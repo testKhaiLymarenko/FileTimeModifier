@@ -6,9 +6,24 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"syscall"
 	"time"
 )
+
+type FileInfo struct {
+	path    string
+	modTime time.Time
+}
+
+type Files []FileInfo
+
+func (f Files) Len() int { return len(f) }
+func (f Files) Less(i, j int) bool {
+	return strings.Count(f[i].path, "\\") > strings.Count(f[j].path, "\\")
+}
+func (f Files) Swap(i, j int) { f[i], f[j] = f[j], f[i] }
 
 func main() {
 
@@ -18,7 +33,7 @@ func main() {
 	}()
 
 	var userPath string
-	//userPath := "I:\\П  Р  И  Р  О   Д  А"
+	//userPath = "I:\\П  Р  И  Р  О   Д  А"
 
 	for {
 		fmt.Print("Path: ")
@@ -43,32 +58,38 @@ func main() {
 
 	start := time.Now()
 	fileCount := 0
+	dirCount := 0
 
-	err := filepath.Walk(userPath, func(path string, file fs.FileInfo, err error) error {
+	var filesList Files
+
+	filepath.Walk(userPath, func(path string, file fs.FileInfo, err error) error {
 		if err != nil {
 			fmt.Println()
 			fmt.Println(err)
 		} else {
-			if userPath != path {
-				if !file.IsDir() {
-					if perr := setCreationTime(path, file.ModTime()); perr != nil {
-						fmt.Println(err)
-					}
-
-					fileCount++
-				}
+			if file.IsDir() {
+				dirCount++
+			} else {
+				fileCount++
 			}
+
+			filesList = append(filesList, FileInfo{path, file.ModTime()})
+
 		}
 
 		return nil
 	})
 
-	if err != nil {
-		fmt.Println(err)
+	sort.Sort(filesList)
+
+	for _, filePath := range filesList {
+		if err := setCreationTime(filePath.path, filePath.modTime); err != nil {
+			fmt.Println(err)
+		}
 	}
 
-	fmt.Printf("\n\nFileTimeModified => FileTimeCreated = success!\tFiles: %d | Elapsed time: %v\n",
-		fileCount, time.Since(start))
+	fmt.Printf("\n\nSuccess! CreationTime has been changed for: %d directories and %d files | Elapsed time: %v\n",
+		dirCount, fileCount, time.Since(start))
 }
 
 func fileExists(path string) bool {
